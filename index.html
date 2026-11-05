@@ -79,6 +79,8 @@
   .coat .sw { width: 38px; height: 38px; border-radius: 50%; box-shadow: inset 0 -6px 10px rgba(0,0,0,0.25); }
   .coat .sw.gray { background: radial-gradient(circle at 35% 30%, #7c7d87, #2a2a30 70%); }
   .coat .sw.cheese { background: repeating-linear-gradient(115deg, #e8a152 0 6px, #b8641c 6px 10px); }
+  .coat .sw.cow { background: radial-gradient(circle at 30% 30%, #1d1d22 0 9px, transparent 10px), radial-gradient(circle at 75% 65%, #1d1d22 0 7px, transparent 8px), #f4f1ec; }
+  .coats { gap: 8px; } .coat { font-size: 15px; padding: 10px 2px; }
   .coat.sel { border-color: var(--accent); background: rgba(233, 138, 143, 0.12); }
   .topBtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .sub { margin-top: 4px; font-size: 15px; color: var(--ink); opacity: 0.85; }
@@ -100,6 +102,7 @@
     <div class="coats" id="welcomeCoats">
       <button type="button" class="coat sel" data-coat="gray"><span class="sw gray"></span>회색냥이</button>
       <button type="button" class="coat" data-coat="cheese"><span class="sw cheese"></span>치즈냥이</button>
+      <button type="button" class="coat" data-coat="cow"><span class="sw cow"></span>젖소냥이</button>
     </div>
     <input id="welcomeInput" type="text" maxlength="12" placeholder="예: 긍디" autocomplete="off" enterkeyhint="go">
     <button class="go" type="submit">시작하기</button><br>
@@ -285,8 +288,8 @@ const furVS = /* glsl */`
 const furFS = /* glsl */`
   uniform float uLayer, uDensity;
   uniform int uKind;
-  uniform vec3 uRoot, uTip, uWhite, uLightDir, uBackDir, uStripeCol, uBelly;
-  uniform float uStripe, uBellyAmt, uSock;
+  uniform vec3 uRoot, uTip, uWhite, uLightDir, uBackDir, uStripeCol, uBelly, uPatchCol;
+  uniform float uStripe, uBellyAmt, uSock, uPatch;
   uniform vec4 uEyeL, uEyeR;
   varying vec3 vBase; varying vec3 vN; varying vec3 vW; varying float vT; varying vec3 vON; varying vec3 vFlow; varying float vCav;
   float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -353,6 +356,18 @@ const furFS = /* glsl */`
       }
       st = clamp(st, 0.0, 1.0) * uStripe * (0.8 + 0.4 * tick);
       col = mix(col, uStripeCol * (0.85 + 0.3 * pat) * (0.9 + 0.2 * tick), st * (0.55 + 0.45 * smoothstep(0.1, 0.9, uLayer)));
+    }
+    if (uPatch > 0.0) {
+      // tuxedo / cow cat: big soft-edged black patches over a white coat, a dark cap on the head, black tail and ears
+      float pn = vnoise(vBase * 1.5 + 21.0) * 0.65 + vnoise(vBase * 3.6 + 2.0) * 0.35;
+      float pm = 0.0;
+      if (uKind == 0) pm = smoothstep(0.47, 0.53, pn + 0.14 * smoothstep(-0.25, 0.55, vBase.y) - 0.06);   // patches like a saddle, white underneath
+      else if (uKind == 1) pm = smoothstep(0.42, 0.48, pn * 0.6 + 0.3 * smoothstep(-0.05, 0.3, vBase.y) + 0.12 * smoothstep(-0.25, 0.25, vBase.z) - 0.1); // cap over the ears, white face
+      else if (uKind == 2) pm = smoothstep(0.3, 0.38, pn + 0.22);                                                            // mostly black tail
+      else if (uKind == 4) pm = 1.0;
+      pm = clamp(pm, 0.0, 1.0) * uPatch;
+      vec3 pc = mix(uPatchCol * 0.45, uPatchCol * (1.0 + 0.3 * streak) * (0.92 + 0.16 * tick), smoothstep(0.15, 0.95, uLayer)) * (0.85 + 0.3 * pat);
+      col = mix(col, pc, pm);
     }
     if (uBellyAmt > 0.0 && uKind == 0) {                                             // cream underside fading up the flanks
       float belly = smoothstep(-0.02, -0.38, vBase.y + 0.06 * warp) * (0.8 + 0.2 * smoothstep(0.3, -0.9, vBase.z));
@@ -456,7 +471,7 @@ function makeFur(geo, { layers: L = 22, len = 0.06, density = 70, kind = 0, root
         ...shared,
         uLayer: { value: i / (layers - 1) }, uLen: { value: len }, uDensity: { value: density },
         uKind: { value: kind }, uRoot: { value: root.clone() }, uTip: { value: tip.clone() }, uWhite: { value: FUR_WHITE.clone() },
-        uStripe: { value: 0 }, uStripeCol: { value: new THREE.Color('#000') }, uBelly: { value: new THREE.Color('#fff') }, uBellyAmt: { value: 0 }, uSock: { value: 0 },
+        uStripe: { value: 0 }, uStripeCol: { value: new THREE.Color('#000') }, uPatch: { value: 0 }, uPatchCol: { value: new THREE.Color('#000') }, uBelly: { value: new THREE.Color('#fff') }, uBellyAmt: { value: 0 }, uSock: { value: 0 },
         uEyeL: { value: EYE_L }, uEyeR: { value: EYE_R },
         uComb: { value: comb }, uRipple: { value: ripple ? 1 : 0 },
       },
@@ -772,7 +787,11 @@ const COATS = {
   cheese: { label: '치즈냥이', root: '#9c4f14', tip: '#e6a356', white: '#fbf4e8', stripe: 1, stripeCol: '#8f3f0c', belly: '#f3dfbf', bellyAmt: 1, sock: 1,
     earRoot: '#a85a1c', earTip: '#e9ad64', earIn: '#eaa39f', earBack: '#c47a3a', nose: '#eea0a2', lid: '#a8622c', rim: '#5a3110',
     iris: ['#7a5a0e', '#c99430', '#f0b84a', '#e9a43c', '#8c5612', '#b07a24', '#c48a2c'], fuzz: ['#e6a356', '#f0bf7e', '#f7dcb3', '#fbeedb', '#c47a3a'], tuft: '#fbeedb' },
+  cow: { label: '젖소냥이', root: '#c9c5bd', tip: '#f7f4ee', white: '#fbf9f5', stripe: 0, stripeCol: '#000', belly: '#fff', bellyAmt: 0, sock: 1, patch: 1, patchCol: '#3a3a40',
+    earRoot: '#1c1c20', earTip: '#4a4a52', earIn: '#e3a6a4', earBack: '#2a2a2f', nose: '#f0a3a6', lid: '#2b2b31', rim: '#141417',
+    iris: ['#2f6a2e', '#7fb24a', '#b9d65a', '#a9c84a', '#4f7a1e', '#6f9a2a', '#86a832'], fuzz: ['#f7f4ee', '#e9e6e0', '#cfd0d6', '#4a4a52', '#2a2a2f'], tuft: '#f7f4ee' },
 };
+const COAT_ORDER = ['gray', 'cheese', 'cow'], COAT_EMOJI = { gray: '🐈‍⬛', cheese: '🐈', cow: '🐮' };
 let coatName = 'gray';
 try { if (COATS[localStorage.getItem('catCoat')]) coatName = localStorage.getItem('catCoat'); } catch (e) {}
 const tmpCol = new THREE.Color();
@@ -785,6 +804,7 @@ function applyCoat(name) {
     u.uWhite.value.set(c.white);
     u.uStripe.value = c.stripe; u.uStripeCol.value.set(c.stripeCol);
     u.uBelly.value.set(c.belly); u.uBellyAmt.value = c.bellyAmt; u.uSock.value = c.sock;
+    u.uPatch.value = c.patch || 0; u.uPatchCol.value.set(c.patchCol || '#000');
   }
   earInMat.color.set(c.earIn); earBackMat.color.set(c.earBack); noseMat.color.set(c.nose);
   lidMat.color.set(c.lid); rimMat.color.set(c.rim);
@@ -793,8 +813,8 @@ function applyCoat(name) {
   if (old) old.dispose();
   for (const t of earTuftMats) t.color.set(c.tuft);
   fuzzShades.length = 0; fuzzShades.push(...c.fuzz);
-  const other = coatName === 'gray' ? 'cheese' : 'gray';
-  coatBtn.textContent = (other === 'cheese' ? '🐈 ' : '🐈‍⬛ ') + COATS[other].label + '로';
+  const other = COAT_ORDER[(COAT_ORDER.indexOf(coatName) + 1) % COAT_ORDER.length];
+  coatBtn.textContent = COAT_EMOJI[other] + ' ' + COATS[other].label + '로';
   for (const b of document.querySelectorAll('#welcomeCoats .coat')) b.classList.toggle('sel', b.dataset.coat === coatName);
 }
 function setCoat(name) {
@@ -802,7 +822,7 @@ function setCoat(name) {
   try { localStorage.setItem('catCoat', coatName); } catch (e) {}
 }
 const coatBtn = document.getElementById('coatBtn');
-coatBtn.addEventListener('click', () => { setCoat(coatName === 'gray' ? 'cheese' : 'gray'); initAudio(); meow('chirp'); });
+coatBtn.addEventListener('click', () => { setCoat(COAT_ORDER[(COAT_ORDER.indexOf(coatName) + 1) % COAT_ORDER.length]); initAudio(); meow('chirp'); });
 for (const b of document.querySelectorAll('#welcomeCoats .coat')) b.addEventListener('click', () => setCoat(b.dataset.coat));
 
 // ---------- particles (hearts + "팡!") ----------
