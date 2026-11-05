@@ -219,6 +219,130 @@ const shadow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 4.2), new THREE.MeshB
 shadow.rotation.x = -Math.PI / 2; shadow.position.set(0.15, 0.09, 0.05);
 scene.add(shadow);
 
+// ---------- cat stuff around the room ----------
+const props = new THREE.Group();
+scene.add(props);
+const propAnims = [];
+function canvasTex(w, h, draw, repeat) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  return t;
+}
+function blobShadow(parent, w, h, x = 0, z = 0, a = 0.5) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: shadow.material.map, transparent: true, depthWrite: false, opacity: a, fog: false }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.055, z); parent.add(m);
+}
+// -- food & water bowls on a little mat (front left)
+{
+  const g = new THREE.Group(); g.position.set(-1.75, 0, -2.4); g.rotation.y = 0.35; g.scale.setScalar(0.85);
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.03, 0.85), new THREE.MeshStandardMaterial({ color: '#b9c9b1', roughness: 1 }));
+  mat.position.y = 0.06; g.add(mat);
+  const bowlOuter = new THREE.MeshStandardMaterial({ color: '#f1f1ee', roughness: 0.35 });
+  const bowlInner = new THREE.MeshStandardMaterial({ color: '#e2dfd8', roughness: 0.4, side: THREE.BackSide });
+  for (const [x, kind] of [[-0.36, 'food'], [0.36, 'water']]) {
+    const pts = [];
+    for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new THREE.Vector2(0.08 + 0.2 * Math.sin(t * Math.PI * 0.5) + 0.02 * t, t * 0.17)); }
+    const bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 40), bowlOuter);
+    const inner = new THREE.Mesh(new THREE.LatheGeometry(pts.map((v) => new THREE.Vector2(v.x * 0.9, v.y + 0.02)), 40), bowlInner);
+    const bowlG = new THREE.Group(); bowlG.position.set(x, 0.075, 0); bowlG.add(bowl, inner);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.02, 10, 40), bowlOuter); rim.rotation.x = Math.PI / 2; rim.position.y = 0.17; bowlG.add(rim);
+    if (kind === 'food') {
+      const kibble = new THREE.InstancedMesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshStandardMaterial({ color: '#8b5a2b', roughness: 0.9 }), 40);
+      const d = new THREE.Object3D();
+      for (let i = 0; i < 40; i++) { const r = Math.sqrt(Math.random()) * 0.2, a = Math.random() * Math.PI * 2; d.position.set(Math.cos(a) * r, 0.1 + Math.random() * 0.05 - r * 0.15, Math.sin(a) * r); d.rotation.set(Math.random() * 3, Math.random() * 3, 0); d.scale.set(1, 0.7, 1.2); d.updateMatrix(); kibble.setMatrixAt(i, d.matrix); }
+      bowlG.add(kibble);
+    } else {
+      const water = new THREE.Mesh(new THREE.CircleGeometry(0.235, 40), new THREE.MeshPhysicalMaterial({ color: '#cfe6ef', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.8, clearcoat: 1 }));
+      water.rotation.x = -Math.PI / 2; water.position.y = 0.13; bowlG.add(water);
+    }
+    g.add(bowlG);
+  }
+  const fish = canvasTex(64, 64, (c) => { c.fillStyle = '#5f7f5a'; c.beginPath(); c.ellipse(26, 32, 18, 10, 0, 0, Math.PI * 2); c.fill(); c.beginPath(); c.moveTo(42, 32); c.lineTo(56, 22); c.lineTo(56, 42); c.fill(); });
+  const fishM = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), new THREE.MeshBasicMaterial({ map: fish, transparent: true })); fishM.rotation.x = -Math.PI / 2; fishM.position.set(0, 0.08, 0.32); fishM.rotation.z = 0.2; g.add(fishM);
+  blobShadow(g, 2.0, 1.3, 0.05, 0.05, 0.35);
+  props.add(g);
+}
+// -- cat tower with sisal post and a dangling ball (back right)
+{
+  const g = new THREE.Group(); g.position.set(2.15, 0, -5.0); g.rotation.y = -0.35; g.scale.setScalar(0.95);
+  const plush = new THREE.MeshStandardMaterial({ color: '#c9b7a0', roughness: 1 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 1.5), plush); base.position.y = 0.1; g.add(base);
+  const sisal = canvasTex(64, 256, (c, w, h) => { c.fillStyle = '#c9a66b'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 5) { c.fillStyle = y % 10 ? 'rgba(90,60,20,0.35)' : 'rgba(255,240,200,0.3)'; c.fillRect(0, y, w, 2); } }, [3, 6]);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.8, 24), new THREE.MeshStandardMaterial({ map: sisal, roughness: 1 })); post.position.y = 1.05; g.add(post);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.12, 32), plush); top.position.y = 2.0; g.add(top);
+  const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.56, 0.1, 32), new THREE.MeshStandardMaterial({ color: '#8c6a53', roughness: 1 })); cushion.position.y = 2.11; g.add(cushion);
+  const rimC = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.08, 12, 32), plush); rimC.rotation.x = Math.PI / 2; rimC.position.y = 2.14; g.add(rimC);
+  const bed2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.8), plush); bed2.position.set(0.55, 0.9, -0.3); g.add(bed2);
+  const post2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.75, 16), post.material); post2.position.set(0.55, 0.52, -0.3); g.add(post2);
+  // dangling toy ball on a string
+  const str = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.7, 6), new THREE.MeshBasicMaterial({ color: '#555' })); str.position.y = -0.35;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), new THREE.MeshStandardMaterial({ color: '#e07a5f', roughness: 0.9 })); ball.position.y = -0.74;
+  const pend = new THREE.Group(); pend.position.set(-0.5, 1.94, 0.25); pend.add(str, ball); g.add(pend);
+  propAnims.push((t) => { pend.rotation.z = Math.sin(t * 1.3) * 0.18; pend.rotation.x = Math.cos(t * 0.9) * 0.12; });
+  blobShadow(g, 2.3, 2.3, 0, 0, 0.45);
+  props.add(g);
+}
+// -- cardboard box with a torn flap (back left)
+{
+  const g = new THREE.Group(); g.position.set(-2.25, 0, -4.8); g.rotation.y = 0.4; g.scale.setScalar(0.9);
+  const card = new THREE.MeshStandardMaterial({ color: '#c89b63', roughness: 1 });
+  const cardIn = new THREE.MeshStandardMaterial({ color: '#9d7647', roughness: 1, side: THREE.BackSide });
+  const sz = [1.5, 0.95, 1.2];
+  const outer = new THREE.Mesh(new THREE.BoxGeometry(...sz), card); outer.position.y = sz[1] / 2 + 0.05;
+  const inner = new THREE.Mesh(new THREE.BoxGeometry(sz[0] - 0.04, sz[1] - 0.02, sz[2] - 0.04), cardIn); inner.position.y = sz[1] / 2 + 0.07;
+  g.add(outer, inner);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.02, sz[2]), card); lid.position.set(-0.75, sz[1] + 0.05, 0); lid.rotation.z = -1.9; lid.geometry.translate(0.36, 0, 0); g.add(lid);
+  const lid2 = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.02, sz[2]), card); lid2.position.set(0.75, sz[1] + 0.05, 0); lid2.rotation.z = 0.35; lid2.geometry.translate(-0.36, 0, 0); g.add(lid2);
+  const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.16, sz[1] * 0.98), new THREE.MeshStandardMaterial({ color: '#b48a4a', roughness: 0.6 })); tape.position.set(0, sz[1] / 2 + 0.05, sz[2] / 2 + 0.002); g.add(tape);
+  const label = canvasTex(128, 64, (c) => { c.fillStyle = '#ffffff'; c.fillRect(0, 0, 128, 64); c.fillStyle = '#4a3b32'; c.font = 'bold 34px sans-serif'; c.textAlign = 'center'; c.fillText('냥', 64, 46); });
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.18), new THREE.MeshStandardMaterial({ map: label, roughness: 0.9 })); lab.position.set(-0.4, 0.55, sz[2] / 2 + 0.003); lab.rotation.z = 0.1; g.add(lab);
+  blobShadow(g, 2.2, 1.9, 0, 0, 0.45);
+  props.add(g);
+}
+// -- round donut bed (back centre)
+{
+  const g = new THREE.Group(); g.position.set(-0.2, 0, -6.6); g.scale.setScalar(1.15);
+  const bedMat = new THREE.MeshStandardMaterial({ color: '#d99c8c', roughness: 1 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.3, 18, 40), bedMat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.3; ring.scale.set(1.15, 1, 1); g.add(ring);
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.16, 40), new THREE.MeshStandardMaterial({ color: '#f3e6d6', roughness: 1 })); pad.position.y = 0.12; pad.scale.set(1.15, 1, 1); g.add(pad);
+  blobShadow(g, 2.6, 2.2, 0, 0, 0.4);
+  props.add(g);
+}
+// -- toys: yarn ball, mouse, feather wand
+{
+  const yarnTex = canvasTex(128, 128, (c) => { c.fillStyle = '#7fa6d9'; c.fillRect(0, 0, 128, 128); c.strokeStyle = 'rgba(40,70,130,0.5)'; c.lineWidth = 3; for (let i = 0; i < 14; i++) { c.beginPath(); c.moveTo(0, i * 10); c.lineTo(128, i * 10 + 30); c.stroke(); } c.strokeStyle = 'rgba(255,255,255,0.35)'; for (let i = 0; i < 14; i++) { c.beginPath(); c.moveTo(0, i * 10 + 5); c.lineTo(128, i * 10 + 35); c.stroke(); } });
+  const yarn = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 18), new THREE.MeshStandardMaterial({ map: yarnTex, roughness: 1 })); yarn.position.set(0, 0.27, 0); yarn.rotation.set(0.5, 0.8, 0.3);
+  const yarnG = new THREE.Group(); yarnG.position.set(1.75, 0, -1.5); yarnG.add(yarn); blobShadow(yarnG, 0.7, 0.6, 0, 0, 0.4);
+  const thread = []; for (let i = 0; i <= 20; i++) { const t = i / 20; thread.push(new THREE.Vector3(t * 0.9, 0.07 + 0.04 * Math.sin(t * 9), 0.4 * Math.sin(t * 3.2) - t * 0.9)); }
+  yarnG.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(thread), 40, 0.012, 6), new THREE.MeshStandardMaterial({ color: '#7fa6d9', roughness: 1 })));
+  props.add(yarnG);
+  // felt mouse
+  const mouse = new THREE.Group(); mouse.position.set(-1.55, 0.05, -1.3); mouse.rotation.y = 2.4;
+  const mBody = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 14), new THREE.MeshStandardMaterial({ color: '#9b9b9b', roughness: 1 })); mBody.scale.set(1.5, 0.8, 1); mBody.position.y = 0.1; mouse.add(mBody);
+  for (const sd of [-1, 1]) { const ear = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16), new THREE.MeshStandardMaterial({ color: '#e8a3a3', roughness: 1, side: THREE.DoubleSide })); ear.position.set(0.12, 0.2, sd * 0.07); ear.rotation.y = Math.PI / 2; mouse.add(ear); }
+  const mTail = []; for (let i = 0; i <= 12; i++) { const t = i / 12; mTail.push(new THREE.Vector3(-0.2 - t * 0.45, 0.06 + 0.02 * Math.sin(t * 5), Math.sin(t * 3) * 0.12)); }
+  mouse.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(mTail), 20, 0.012, 6), new THREE.MeshStandardMaterial({ color: '#d98a8a', roughness: 1 })));
+  blobShadow(mouse, 0.7, 0.45, -0.1, 0, 0.35);
+  props.add(mouse);
+  // feather wand leaning against the tower
+  const wand = new THREE.Group(); wand.position.set(1.3, 0.06, -2.6); wand.rotation.set(Math.PI / 2 + 0.04, 0, 0); wand.rotation.y = 0.9;
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 1.5, 8), new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.8 })); stick.position.y = 0.75; wand.add(stick);
+  const featherTex = canvasTex(64, 128, (c) => { c.fillStyle = '#f2b5c4'; c.beginPath(); c.ellipse(32, 64, 14, 56, 0, 0, Math.PI * 2); c.fill(); c.strokeStyle = 'rgba(200,80,120,0.6)'; c.lineWidth = 2; c.beginPath(); c.moveTo(32, 8); c.lineTo(32, 120); c.stroke(); });
+  for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.4), new THREE.MeshStandardMaterial({ map: featherTex, transparent: true, side: THREE.DoubleSide, roughness: 1, color: i % 2 ? '#ffffff' : '#ffe9a8' })); f.position.set(0.0, 1.62, 0); f.rotation.set(0.5 + i * 0.3, i * 1.5, 0.2); wand.add(f); }
+  props.add(wand);
+}
+function updateProps(t) { for (const f of propAnims) f(t); }
+// on a narrow phone screen pull everything a little closer to the cat so it stays in frame
+for (const g of props.children) g.userData.bx = g.position.x;
+function layoutProps() {
+  const aspect = innerWidth / innerHeight;
+  const k = aspect < 0.7 ? 0.62 : aspect < 1.0 ? 0.62 + (aspect - 0.7) * 1.27 : 1;
+  for (const g of props.children) g.position.x = g.userData.bx * k;
+}
+layoutProps();
+
 // ---------- fur shell shader ----------
 const shared = {
   uTime: { value: 0 },
@@ -1480,6 +1604,7 @@ function placeCamera() {
   camera.lookAt(camTarget);
 }
 addEventListener('resize', () => {
+  layoutProps();
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
@@ -1561,6 +1686,7 @@ function tick() {
 
   updateHands(dt);
   updateFuzz(dt, t);
+  updateProps(t);
 
   // particles
   for (let i = particles.length - 1; i >= 0; i--) {
