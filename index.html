@@ -80,7 +80,9 @@
   .coat .sw.gray { background: radial-gradient(circle at 35% 30%, #7c7d87, #2a2a30 70%); }
   .coat .sw.cheese { background: repeating-linear-gradient(115deg, #e8a152 0 6px, #b8641c 6px 10px); }
   .coat .sw.cow { background: radial-gradient(circle at 30% 30%, #1d1d22 0 9px, transparent 10px), radial-gradient(circle at 75% 65%, #1d1d22 0 7px, transparent 8px), #f4f1ec; }
-  .coats { gap: 8px; } .coat { font-size: 15px; padding: 10px 2px; }
+  .coats { gap: 8px; flex-wrap: wrap; } .coat { font-size: 15px; padding: 10px 2px; flex: 1 1 30%; }
+  .coat .sw.sphynx { background: radial-gradient(circle at 35% 30%, #efd0c4, #c69a8c 70%); }
+  .coat .sw.persian { background: radial-gradient(circle at 40% 35%, #fffdf8, #e2d4bd 60%, #cbb79c); box-shadow: 0 0 0 5px rgba(240,230,210,0.7), inset 0 -6px 10px rgba(0,0,0,0.12); }
   .coat.sel { border-color: var(--accent); background: rgba(233, 138, 143, 0.12); }
   .topBtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .sub { margin-top: 4px; font-size: 15px; color: var(--ink); opacity: 0.85; }
@@ -103,6 +105,8 @@
       <button type="button" class="coat sel" data-coat="gray"><span class="sw gray"></span>회색냥이</button>
       <button type="button" class="coat" data-coat="cheese"><span class="sw cheese"></span>치즈냥이</button>
       <button type="button" class="coat" data-coat="cow"><span class="sw cow"></span>젖소냥이</button>
+      <button type="button" class="coat" data-coat="sphynx"><span class="sw sphynx"></span>스핑크스</button>
+      <button type="button" class="coat" data-coat="persian"><span class="sw persian"></span>페르시안</button>
     </div>
     <input id="welcomeInput" type="text" maxlength="12" placeholder="예: 긍디" autocomplete="off" enterkeyhint="go">
     <button class="go" type="submit">시작하기</button><br>
@@ -352,10 +356,11 @@ const shared = {
   uTailIdle: { value: 0 },
   uHit: { value: new THREE.Vector4(0, 0, 99, -10) },
   uBristle: { value: 0 },
+  uFurScale: { value: 1 },
   uBackDir: { value: new THREE.Vector3(0.35, 0.55, -0.75).normalize() },
 };
 const furVS = /* glsl */`
-  uniform float uLayer, uLen, uTime, uLift, uFlick, uTailIdle, uComb, uRipple, uBristle;
+  uniform float uLayer, uLen, uTime, uLift, uFlick, uTailIdle, uComb, uRipple, uBristle, uFurScale;
   uniform vec4 uHit;
   uniform int uKind;
   attribute float aT;
@@ -402,7 +407,7 @@ const furVS = /* glsl */`
     float shake = uBristle * sin(uTime * 38.0 + position.z * 9.0) * 0.08;
     vec3 dir = normalize(n * (1.0 + uBristle * 1.2) + (flow * (comb + wave * 0.9) + vec3(0.0, -0.18 * uLayer * (1.0 - uBristle), 0.0) + wob * 0.3 * uLayer) * uLayer + vec3(sway * 0.05 + shake, 0.0, sway * 0.03) * uLayer * uLayer);
     float puff = 1.0 + uBristle * (uKind == 2 ? 0.9 : 0.45);
-    p += dir * uLen * aLen * tuft * uLayer * puff;
+    p += dir * uLen * uFurScale * aLen * tuft * uLayer * puff;
     vec4 w = modelMatrix * vec4(p, 1.0);
     vW = w.xyz;
     vN = normalize(mat3(modelMatrix) * n);
@@ -413,7 +418,7 @@ const furFS = /* glsl */`
   uniform float uLayer, uDensity;
   uniform int uKind;
   uniform vec3 uRoot, uTip, uWhite, uLightDir, uBackDir, uStripeCol, uBelly, uPatchCol;
-  uniform float uStripe, uBellyAmt, uSock, uPatch;
+  uniform float uStripe, uBellyAmt, uSock, uPatch, uFurScale;
   uniform vec4 uEyeL, uEyeR;
   varying vec3 vBase; varying vec3 vN; varying vec3 vW; varying float vT; varying vec3 vON; varying vec3 vFlow; varying float vCav;
   float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -496,6 +501,11 @@ const furFS = /* glsl */`
     if (uBellyAmt > 0.0 && uKind == 0) {                                             // cream underside fading up the flanks
       float belly = smoothstep(-0.02, -0.38, vBase.y + 0.06 * warp) * (0.8 + 0.2 * smoothstep(0.3, -0.9, vBase.z));
       col = mix(col, uBelly * (0.9 + 0.15 * tick) * (0.9 + 0.2 * pat), belly * uBellyAmt * 0.95);
+    }
+    if (uFurScale < 0.2 && uLayer == 0.0) {                                           // hairless: soft skin folds and mottling
+      float wr = sin(vBase.z * 26.0 + vBase.y * 6.0 + warp * 2.0) * (uKind == 0 ? 1.0 : 0.0) + sin(vT * 90.0) * (uKind == 2 ? 0.6 : 0.0);
+      col *= 1.0 - 0.14 * smoothstep(0.55, 1.0, wr) * smoothstep(-0.4, 0.2, vBase.y);
+      col = mix(col, col * vec3(1.08, 0.9, 0.9), 0.5 * smoothstep(0.3, 0.8, vnoise(vBase * 6.0 + 3.0)));   // pinker blotches
     }
     float white = 0.0;
     if (uKind == 5) white = uSock * smoothstep(0.1, -0.08, vBase.z + vBase.y * 0.6);   // white mittens on the front paws
@@ -601,8 +611,8 @@ function makeFur(geo, { layers: L = 22, len = 0.06, density = 70, kind = 0, root
       },
       alphaToCoverage: A2C,
     });
-    furMats.push({ m, slot });
     const mesh = new THREE.Mesh(geo, m);
+    furMats.push({ m, slot, mesh, layer: i });
     mesh.renderOrder = i;
     if (i > 0) mesh.raycast = () => {};
     grp.add(mesh);
@@ -915,13 +925,27 @@ const COATS = {
     earRoot: '#1c1c20', earTip: '#4a4a52', earIn: '#e3a6a4', earBack: '#2a2a2f', nose: '#f0a3a6', lid: '#2b2b31', rim: '#141417',
     iris: ['#2f6a2e', '#7fb24a', '#b9d65a', '#a9c84a', '#4f7a1e', '#6f9a2a', '#86a832'], fuzz: ['#f7f4ee', '#e9e6e0', '#cfd0d6', '#4a4a52', '#2a2a2f'], tuft: '#f7f4ee' },
 };
-const COAT_ORDER = ['gray', 'cheese', 'cow'], COAT_EMOJI = { gray: '🐈‍⬛', cheese: '🐈', cow: '🐮' };
+const COAT_ORDER = ['gray', 'cheese', 'cow', 'sphynx', 'persian'], COAT_EMOJI = { gray: '🐈‍⬛', cheese: '🐈', cow: '🐮', sphynx: '🩹', persian: '☁️' };
+COATS.sphynx = { label: '스핑크스', root: '#e6bfb2', tip: '#efd0c4', white: '#ebc7bb', stripe: 0, stripeCol: '#000', belly: '#fff', bellyAmt: 0, sock: 0,
+  earRoot: '#d6a99b', earTip: '#e6c2b6', earIn: '#e8b1a9', earBack: '#cfa093', nose: '#d58d8d', lid: '#caa092', rim: '#8c6054',
+  iris: ['#5a7a2a', '#9fc04a', '#cfe06a', '#bfd055', '#5f7f28', '#86a338', '#9ab844'], fuzz: ['#e9c7bb'], tuft: '#e9c7bb',
+  bald: true, fur: 0.04, bodyScale: [0.72, 0.86, 0.96], tailScale: [0.62, 0.62, 1], earScale: 1.4, whisker: 0.25 };
+COATS.persian = { label: '페르시안', root: '#b8a386', tip: '#fbf7ef', white: '#fdfaf4', stripe: 0, stripeCol: '#000', belly: '#fff', bellyAmt: 0, sock: 0,
+  earRoot: '#d6c6ad', earTip: '#f6efe2', earIn: '#e9b2ad', earBack: '#d9c7ae', nose: '#e49a9c', lid: '#b9a58c', rim: '#5a4a3a',
+  iris: ['#7a4a10', '#c47a2a', '#e8a048', '#dc9240', '#8a4e12', '#b06e24', '#c48030'], fuzz: ['#fbf7ef', '#f0e8d8', '#e2d6c0', '#fffdf8'], tuft: '#fffdf8',
+  fur: 1.8, bodyScale: [1.1, 1.06, 1.02], earScale: 0.78, whisker: 0.85 };
 let coatName = 'gray';
 try { if (COATS[localStorage.getItem('catCoat')]) coatName = localStorage.getItem('catCoat'); } catch (e) {}
 const tmpCol = new THREE.Color();
 function applyCoat(name) {
   const c = COATS[name] || COATS.gray; coatName = name in COATS ? name : 'gray';
-  for (const { m, slot } of furMats) {
+  shared.uFurScale.value = c.fur || 1;
+  bodyFur.scale.fromArray(c.bodyScale || [1, 1, 1]);
+  tail.scale.fromArray(c.tailScale || [1, 1, 1]);
+  for (const e of ears) e.scale.setScalar(0.92 * (c.earScale || 1));
+  whiskerMat.opacity = c.whisker ?? 0.85;
+  for (const { m, slot, mesh, layer } of furMats) {
+    mesh.visible = !(c.bald && layer > 0);     // a hairless cat is just the skin layer
     const u = m.uniforms;
     u.uRoot.value.set(slot === 'ear' ? c.earRoot : c.root);
     u.uTip.value.set(slot === 'ear' ? c.earTip : c.tip);
@@ -1238,6 +1262,7 @@ const fuzzShades = ['#9a9ba6', '#b3b4bd', '#cfd0d6', '#e4e4e8', '#7c7d87'];
 applyCoat(coatName);
 let fuzzNext = 0;
 function puffFur(point, normal, count, speed) {
+  if (COATS[coatName].bald) return;          // nothing to shed
   for (let k = 0; k < count; k++) {
     const i = fuzzNext; fuzzNext = (fuzzNext + 1) % FUZZ_MAX;
     const dir = normal.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, Math.random() * 0.8, (Math.random() - 0.5) * 1.6)).normalize();
