@@ -16,9 +16,9 @@
 
 ```bash
 npm install
-npm run build:toss   # dist/ 생성 후 cat-butt-pat.ait 만들기
+npm run build:toss   # dist/ 생성 후 catbuttpat.ait 만들기
 npx ait deploy --api-key <콘솔에서 발급한 키>   # 콘솔에 업로드
 ```
 
-- `apps-in-toss.config.ts`의 `appName`(`cat-butt-pat`)은 콘솔에 등록한 앱 이름과 같아야 해요.
+- `apps-in-toss.config.ts`의 `appName`(`catbuttpat`)은 콘솔에 등록한 앱 이름과 같아야 해요.
 - `main`에 푸시하면 GitHub Actions가 `.ait` 파일을 만들어 Actions 실행 결과의 Artifacts에 올려둬요.

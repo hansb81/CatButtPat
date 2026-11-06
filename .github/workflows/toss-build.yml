@@ -17,5 +17,5 @@ jobs:
       - run: npm run build:toss
       - uses: actions/upload-artifact@v4
         with:
-          name: cat-butt-pat-ait
-          path: cat-butt-pat.ait
+          name: catbuttpat-ait
+          path: catbuttpat.ait
