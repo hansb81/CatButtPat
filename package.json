@@ -1,0 +1,18 @@
+{
+  "name": "catbuttpat",
+  "private": true,
+  "version": "1.0.0",
+  "description": "고양이 궁디 팡팡 — 앱인토스 미니앱 빌드",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/build-toss.mjs && npx --yes serve dist -l 5173",
+    "build": "node scripts/build-toss.mjs",
+    "build:toss": "node scripts/build-toss.mjs && ait build",
+    "deploy:toss": "ait deploy"
+  },
+  "devDependencies": {
+    "@apps-in-toss/web-framework": "3.10.0",
+    "@fontsource/jua": "5.3.0",
+    "three": "0.160.0"
+  }
+}

@@ -1,0 +1,21 @@
+name: Build Apps in Toss bundle
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run build:toss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catbuttpat-ait
+          path: catbuttpat.ait
