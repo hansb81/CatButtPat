@@ -3,6 +3,7 @@
 // three.js와 주아체 폰트를 node_modules에서 복사해 넣고, index.html의 외부 링크를 바꿔요.
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { buildSync } from "esbuild";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,6 +46,18 @@ html = html.replace(/<meta name="apple-mobile-web-app-[^>]*>\n/g, "");
 
 const leftover = html.match(/(?:src|href)="https?:\/\/[^"]+"/g)?.filter((m) => !m.includes("og.png"));
 if (leftover?.length) throw new Error("외부 리소스가 남아 있어요: " + leftover.join(", "));
+
+// 하단 배너 광고 (AD_TEST=1 이면 테스트 광고 ID로 빌드해요)
+const ads = JSON.parse(readFileSync(join(root, "scripts", "toss-ads.config.json"), "utf8"));
+const adId = process.env.AD_TEST === "1" ? ads.testBannerAdGroupId : ads.bannerAdGroupId;
+buildSync({
+  entryPoints: [join(root, "scripts", "toss-ads.js")],
+  bundle: true, minify: true, format: "iife", target: "es2019",
+  define: { __AD_GROUP_ID__: JSON.stringify(adId) },
+  outfile: join(dist, "vendor", "ads.js"),
+});
+swap("</body>", '<script src="./vendor/ads.js"></script>\n</body>', "</body> 태그");
+console.log("배너 광고 ID:", adId === ads.testBannerAdGroupId ? "테스트" : "실제");
 
 writeFileSync(join(dist, "index.html"), html);
 console.log("dist/ 준비 완료");

@@ -54,7 +54,7 @@
   canvas { display: block; }
   [hidden] { display: none !important; }
   #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, var(--vignette) 100%); }
-  #ui { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
+  #ui { position: fixed; inset: 0 0 var(--ad-h, 0px) 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
   .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .titleBox { background: var(--panel); border: 1px solid var(--chip-border); border-radius: 18px; padding: 10px 16px 12px; backdrop-filter: blur(8px); box-shadow: 0 4px 18px rgba(60, 40, 20, 0.12); max-width: 100%; box-sizing: border-box; }
   h1 { margin: 0; font-size: clamp(22px, 5vw, 32px); font-weight: 400; letter-spacing: -0.5px; }
@@ -132,6 +132,10 @@
   <div class="bottom"><div id="count">팡팡 <b id="n">0</b>번 · <span id="mood">새침함</span></div></div>
 </div>
 <script>
+// space reserved at the bottom for a banner ad (only in the Apps in Toss build; 0 on the web)
+let adH = 0;
+const viewH = () => Math.max(1, innerHeight - adH);
+window.setAdBarHeight = (h) => { adH = h || 0; document.documentElement.style.setProperty('--ad-h', adH + 'px'); dispatchEvent(new Event('resize')); };
 (function () {
 function showError(msg) {
   let el = document.getElementById('err');
@@ -148,7 +152,7 @@ const A2C = !location.search.includes('noa2c');
 // ---------- renderer / scene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1.25 : 1.5));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth, viewH());
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -168,7 +172,7 @@ const scene = new THREE.Scene();
 }
 scene.fog = new THREE.Fog('#efe3d1', 9, 22);
 
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(38, innerWidth / viewH(), 0.1, 100);
 const camTarget = new THREE.Vector3(0.15, 0.62, -0.1);
 
 const LIGHT_DIR = new THREE.Vector3(-0.45, 1.0, 0.55).normalize();
@@ -341,7 +345,7 @@ function updateProps(t) { for (const f of propAnims) f(t); }
 // on a narrow phone screen pull everything a little closer to the cat so it stays in frame
 for (const g of props.children) g.userData.bx = g.position.x;
 function layoutProps() {
-  const aspect = innerWidth / innerHeight;
+  const aspect = innerWidth / viewH();
   const k = aspect < 0.7 ? 0.62 : aspect < 1.0 ? 0.62 + (aspect - 0.7) * 1.27 : 1;
   for (const g of props.children) g.position.x = g.userData.bx * k;
 }
@@ -1218,7 +1222,7 @@ document.getElementById('welcomeSkip').addEventListener('click', () => { welcome
 const hitTargets = [bodyFur.userData.base, tail.userData.base, headFur.userData.base];
 
 function pick(e) {
-  ptr.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ptr.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / viewH()) * 2 + 1);
   ray.setFromCamera(ptr, camera);
   return ray.intersectObjects(hitTargets, false)[0];
 }
@@ -1620,7 +1624,7 @@ addEventListener('pointermove', (e) => {
 });
 renderer.domElement.addEventListener('wheel', (e) => { orbit.dist = THREE.MathUtils.clamp(orbit.dist + e.deltaY * 0.003, 3.6, 8); }, { passive: true });
 function placeCamera() {
-  const aspect = innerWidth / innerHeight;
+  const aspect = innerWidth / viewH();
   const d = orbit.dist * (aspect < 0.8 ? 1.2 + (0.8 - aspect) * 1.0 : 1);
   camera.position.set(
     camTarget.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * d,
@@ -1630,10 +1634,10 @@ function placeCamera() {
 }
 addEventListener('resize', () => {
   layoutProps();
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / viewH(); camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, viewH());
 });
-camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+camera.aspect = innerWidth / viewH(); camera.updateProjectionMatrix();
 
 // ---------- loop ----------
 const clock = new THREE.Clock();
